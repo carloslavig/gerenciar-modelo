@@ -22,6 +22,8 @@ BLOCO = (
     "Em toda conversa e em todo projeto, antes de delegar a subagente, abrir sessão nova "
     "ou começar tarefa de construção, use a skill `gerenciar-modelo` "
     "(config em `~/.claude/gerenciar-modelo.json`; nunca use modelo fora de `modelos_permitidos`).\n"
+    "Eu peço: divida as tarefas grandes em sessões filhas ligadas, em modelos mais baratos, que fazem a parte "
+    "delas e devolvem o resultado; troque de modelo sozinho, sem me avisar.\n"
     f"{FIM}\n"
 )
 
@@ -102,6 +104,8 @@ def instalar(base=CLAUDE):
     if padrao:
         print(f"  - \"model\": \"{modelo_padrao(modo)}\" no {base / 'settings.json'} (o valor antigo volta com --desinstalar)")
     print("A troca de modelo acontece sozinha, sem avisar a cada vez.")
+    if global_:
+        print("Tarefas grandes viram sessões filhas ligadas à conversa, em modelos mais baratos, que devolvem o resultado.")
     if not sim("Autoriza a instalação?"):
         print("Nada foi gravado.")
         return False

@@ -42,11 +42,26 @@ Esforço (`effort`): economia usa `low` em pergunta e `medium` no resto; perform
 
 A pessoa já autorizou na instalação: **troque sozinho, sem avisar e sem pedir confirmação**. Não escreva "vou usar o modelo X" nem relatório de modelos.
 
-1. **Subagente (o jeito principal):** a conversa atual é a coordenadora. Mande cada parte, pelo tipo da tabela, a um `Agent` com `model: "haiku" | "sonnet" | "opus" | "fable"` e revise o que voltar. Assim o trabalho roda no modelo certo sem trocar a conversa.
-2. **Sessão nova:** `mcp__ccd_session__start_session` com o `model` da tabela.
-3. **Outra sessão que eu iniciei:** `mcp__ccd_session_mgmt__set_session_model` (`session_id`, id do seletor, ex. `claude-sonnet-5-5`) e `set_session_effort`. Se o app pedir OK (modelo mais caro), é o app que pergunta, não eu. Nunca mexa em sessão que eu não iniciei.
-4. **Conversas novas:** o instalador grava em `~/.claude/settings.json` o modelo padrão do modo (economia → sonnet, performance → opus). Toda conversa nova já começa nele.
-5. **Esta conversa:** o app não deixa uma sessão trocar o próprio modelo. Não tente contornar e não fique avisando: use o item 1.
+A conversa atual é a **coordenadora**: planeja, divide e revisa. O trabalho desce por uma **árvore de processo**, cada galho num modelo mais barato, e o resultado sobe de volta.
+
+```
+Opus (conversa aberta: plano e revisão)
+ └─ Sonnet (sessão filha: implementa a parte)
+     └─ Haiku (sessão neta: busca, lê, testa, confere)
+```
+
+1. **Parte pequena** (o resultado cabe nesta resposta, poucas chamadas): `Agent` com `model: "haiku" | "sonnet" | "opus" | "fable"`. Volta na hora e eu reviso.
+2. **Parte grande** (vários arquivos ou passos, roda sozinha): **sessão filha ligada** a esta, com `mcp__ccd_session__start_session`:
+   - `initiation: "user_asked"` (a pessoa pediu essa divisão por escrito, na regra do `CLAUDE.md` que ela autorizou), `context: "fresh"`, `model` da tabela (o app só aceita igual ou mais barato que o meu: a árvore só desce), `effort` do modo;
+   - `prompt` = a tarefa, os arquivos e o que é "pronto"; `background` = o resumo do que esta conversa já decidiu (é isso que leva o contexto, mais barato que copiar a conversa inteira);
+   - no fim do `prompt`: "Ao terminar, responda só: o que mudou, arquivos, testes e o que ficou pendente. Se uma parte for mecânica, abra uma sessão filha sua num modelo mais barato.";
+   - duas filhas que escrevem nunca mexem nos mesmos arquivos: com risco de sobrepor, `use_worktree: true`.
+   - Quando a filha termina, o app me acorda com o relatório. Eu confiro o resultado (diff, testes) antes de seguir e só então passo para a próxima parte ou fecho.
+3. **Profundidade máxima 3** (coordenadora → filha → neta). Não abra galho para o que eu faço em 1 ou 2 chamadas: cada sessão começa do zero.
+4. **Outra sessão que eu iniciei:** `mcp__ccd_session_mgmt__set_session_model` (`session_id`, id do seletor, ex. `claude-sonnet-5-5`) e `set_session_effort`. Se o app pedir OK (modelo mais caro), é o app que pergunta, não eu. Nunca mexa em sessão que eu não iniciei.
+5. **Conversas novas:** o instalador grava em `~/.claude/settings.json` o modelo padrão do modo (economia → sonnet, performance → opus). Toda conversa nova já começa nele.
+6. **Esta conversa:** o app não deixa uma sessão trocar o próprio modelo. Não tente contornar e não fique avisando: use os itens 1 e 2.
+7. **Sem as ferramentas do app** (terminal puro, sem `start_session`): só o item 1.
 
 ## 5. Economizar de verdade
 
