@@ -1,9 +1,9 @@
 """Instala a skill gerenciar-modelo no Claude Code, pedindo autorização a cada passo.
 
 Uso:
-  python instalar.py               instala (pergunta tudo antes de gravar)
-  python instalar.py --modo auto   troca só o modo (economia | performance | auto)
-  python instalar.py --desinstalar remove tudo o que o instalador gravou
+  python instalar.py                      instala (pergunta tudo antes de gravar)
+  python instalar.py --modo performance   troca só o modo (economia | performance)
+  python instalar.py --desinstalar        remove tudo o que o instalador gravou
 """
 import json
 import shutil
@@ -12,20 +12,34 @@ from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
 CLAUDE = Path.home() / ".claude"
-MODOS = ("economia", "performance", "auto")
-PLANOS = ("Pro", "Max", "Team", "Enterprise", "API")
+CONTA = Path.home() / ".claude.json"
+MODOS = ("economia", "performance")
+PLANOS = ("Pro", "Max", "Ultra", "Team", "Enterprise", "API")
 INICIO = "<!-- gerenciar-modelo:inicio -->"
 FIM = "<!-- gerenciar-modelo:fim -->"
 BLOCO = (
     f"{INICIO}\n"
     "# Gerenciar modelo\n"
-    "Em toda conversa e em todo projeto, antes de delegar a subagente, abrir sessão nova "
-    "ou começar tarefa de construção, use a skill `gerenciar-modelo` "
+    "Em toda conversa e em todo projeto, em toda tarefa, use a skill `gerenciar-modelo` "
     "(config em `~/.claude/gerenciar-modelo.json`; nunca use modelo fora de `modelos_permitidos`).\n"
-    "Eu peço: divida as tarefas grandes em sessões filhas ligadas, em modelos mais baratos, que fazem a parte "
-    "delas e devolvem o resultado; troque de modelo sozinho, sem me avisar.\n"
+    "Eu peço: economize tokens o tempo todo; divida as tarefas numa árvore de subagentes e sessões filhas "
+    "ligadas, em modelos mais baratos, que fazem a parte delas e devolvem o resultado; troque de modelo "
+    "sozinho, sem me avisar.\n"
     f"{FIM}\n"
 )
+
+
+def detectar_plano(conta=CONTA):
+    """Lê só o tipo de organização do login do Claude Code (nada de token ou e-mail)."""
+    try:
+        dados = json.loads(conta.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    tipo = str((dados.get("oauthAccount") or {}).get("organizationType") or "").lower()
+    for plano in PLANOS[:-1]:
+        if plano.lower() in tipo:
+            return plano
+    return "API" if dados.get("primaryApiKey") and not tipo else None
 
 
 def modelos_do_plano(plano, tem_fable):
@@ -33,14 +47,15 @@ def modelos_do_plano(plano, tem_fable):
     return base + ["fable"] if tem_fable and plano != "Pro" else base
 
 
-def config(plano, modo, tem_fable, limite=70):
+def config(plano, modo, tem_fable):
     assert plano in PLANOS and modo in MODOS
-    return {"plano": plano, "modo": modo, "modelos_permitidos": modelos_do_plano(plano, tem_fable),
-            "limite_economia": limite}
+    return {"plano": plano, "modo": modo, "modelos_permitidos": modelos_do_plano(plano, tem_fable)}
 
 
-def modelo_padrao(modo):
-    return "opus" if modo == "performance" else "sonnet"
+def modelo_padrao(modo, permitidos):
+    if modo == "economia":
+        return "sonnet"
+    return "fable" if "fable" in permitidos else "opus"
 
 
 def ler_json(arq):
@@ -88,15 +103,19 @@ def sim(texto):
     return perguntar(texto, ("s", "n")) == "s"
 
 
-def instalar(base=CLAUDE):
+def instalar(base=CLAUDE, conta=CONTA):
     print("Instalador da skill gerenciar-modelo. Nada é gravado antes da sua confirmação final.\n")
-    plano = perguntar("Qual é o seu plano do Claude?", PLANOS)
+    plano = detectar_plano(conta)
+    if not (plano and sim(f"Detectei o plano {plano}. Está certo?")):
+        plano = perguntar("Qual é o seu plano do Claude?", PLANOS)
     tem_fable = plano != "Pro" and sim("Seu plano inclui o modelo Fable?")
-    modo = perguntar("Modo (economia gasta menos; performance prioriza qualidade; auto troca sozinho pelo uso)", MODOS)
+    modo = perguntar("Modo (os dois economizam sempre; economia usa Sonnet na principal e Fable só em extrema "
+                     "necessidade; performance usa Opus/Fable na principal e pode delegar ao Fable)", MODOS)
     cfg = config(plano, modo, tem_fable)
+    padrao_modelo = modelo_padrao(modo, cfg["modelos_permitidos"])
     global_ = sim("Aplicar em TODAS as conversas (antigas quando forem retomadas, novas) e em todos os projetos, "
                   f"adicionando uma regra em {base / 'CLAUDE.md'}?")
-    padrao = sim(f"Trocar sozinho o modelo padrão das conversas novas conforme o modo (agora: {modelo_padrao(modo)}), "
+    padrao = sim(f"Pôr o modelo padrão das conversas novas conforme o modo (agora: {padrao_modelo}), "
                  f"em {base / 'settings.json'}?")
 
     print("\nVai ser gravado:")
@@ -105,10 +124,9 @@ def instalar(base=CLAUDE):
     if global_:
         print(f"  - regra no {base / 'CLAUDE.md'} (entre marcadores, removível com --desinstalar)")
     if padrao:
-        print(f"  - \"model\": \"{modelo_padrao(modo)}\" no {base / 'settings.json'} (o valor antigo volta com --desinstalar)")
-    print("A troca de modelo acontece sozinha, sem avisar a cada vez.")
-    if global_:
-        print("Tarefas grandes viram sessões filhas ligadas à conversa, em modelos mais baratos, que devolvem o resultado.")
+        print(f"  - \"model\": \"{padrao_modelo}\" no {base / 'settings.json'} (o valor antigo volta com --desinstalar)")
+    print("A partir da instalação, toda tarefa é dividida em subagentes e sessões filhas mais baratas")
+    print("(Haiku para buscar e ler, Sonnet para implementar), e a troca de modelo acontece sozinha, sem aviso.")
     if not sim("Autoriza a instalação?"):
         print("Nada foi gravado.")
         return False
@@ -116,10 +134,13 @@ def instalar(base=CLAUDE):
     destino = base / "skills" / "gerenciar-modelo"
     destino.mkdir(parents=True, exist_ok=True)
     shutil.copy2(AQUI / "skill" / "SKILL.md", destino / "SKILL.md")
+    antigo = ler_json(base / "gerenciar-modelo.json")
     if padrao:
         cfg["padrao_gravado"] = True
-        cfg["modelo_anterior"] = ler_json(base / "settings.json").get("model")
-        por_padrao(base, modelo_padrao(modo))
+        # reinstalação: guarda o modelo de antes da PRIMEIRA instalação, não o que ela mesma pôs
+        cfg["modelo_anterior"] = (antigo["modelo_anterior"] if antigo.get("padrao_gravado")
+                                  else ler_json(base / "settings.json").get("model"))
+        por_padrao(base, padrao_modelo)
     gravar_json(base / "gerenciar-modelo.json", cfg)
     if global_:
         md = base / "CLAUDE.md"
@@ -136,7 +157,7 @@ def trocar_modo(modo, base=CLAUDE):
     cfg["modo"] = modo
     gravar_json(arq, cfg)
     if cfg.get("padrao_gravado"):
-        por_padrao(base, modelo_padrao(modo))
+        por_padrao(base, modelo_padrao(modo, cfg["modelos_permitidos"]))
     print(f"Modo agora: {modo}")
 
 

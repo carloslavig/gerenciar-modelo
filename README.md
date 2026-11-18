@@ -2,8 +2,11 @@
 
 Skill para o [Claude Code](https://claude.com/claude-code) que escolhe sozinha o modelo Claude (Haiku, Sonnet, Opus, Fable) para cada parte da tarefa, de acordo com o seu plano e quanto você ainda pode gastar.
 
-- **Respeita o plano:** no Pro nunca usa o Fable. Nos outros planos o instalador pergunta se o seu plano tem o Fable.
-- **Três modos:** `economia` gasta menos, `performance` prioriza qualidade, e `auto` (padrão) fica em performance até o uso passar de 70% e então muda para economia. No app desktop a skill lê o uso pela ferramenta `get_usage`.
+- **Detecta o plano:** o instalador lê o tipo de plano do seu login do Claude Code (Pro, Max, Team, Enterprise ou API, sem ler token nem e-mail) e pede para você confirmar. No app desktop a skill confere de novo a cada tarefa. No Pro nunca usa o Fable.
+- **Economiza sempre:** desde a instalação, toda tarefa é dividida. Não existe gatilho de uso.
+- **Dois modos:**
+  - `economia` (padrão): conversa principal no Sonnet, Opus quando o problema é difícil, e Fable só em extrema necessidade e se o plano permitir.
+  - `performance`: conversa principal no Opus, ou no Fable se o plano permitir, e pode delegar ao Fable. Gasta mais, mas busca e leitura continuam no Haiku.
 - **Automático e calado:** depois que você autoriza, a troca acontece sem aviso. As partes da tarefa vão para subagentes no modelo certo, sessões novas já abrem no modelo certo, e o modelo padrão das conversas novas segue o modo.
 - **Árvore de processo:** a conversa aberta coordena. Uma parte grande vira uma sessão filha ligada a ela num modelo mais barato (Opus → Sonnet → Haiku). A filha faz a parte, pode abrir a própria filha para o trabalho mecânico e devolve o relatório. A coordenadora confere e segue. Partes pequenas vão para subagentes.
 - **Vale para tudo:** conversas novas, conversas antigas quando você as retoma, e todos os projetos (pela regra no `~/.claude/CLAUDE.md`).
