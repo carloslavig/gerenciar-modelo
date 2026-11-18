@@ -22,6 +22,11 @@ def _responder(monkeypatch, respostas):
     monkeypatch.setattr(builtins, "input", lambda _: next(it))
 
 
+def test_bom_do_powershell_e_ignorado(monkeypatch):
+    _responder(monkeypatch, ["﻿Pro"])
+    assert i.perguntar("plano?", i.PLANOS) == "Pro"
+
+
 def test_recusa_nao_grava_nada(tmp_path, monkeypatch):
     _responder(monkeypatch, ["Pro", "economia", "s", "s", "n"])
     assert i.instalar(tmp_path) is False

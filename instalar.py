@@ -74,7 +74,10 @@ def sem_bloco(texto):
 
 def perguntar(texto, opcoes):
     while True:
-        r = input(f"{texto} [{'/'.join(opcoes)}]: ").strip()
+        try:
+            r = input(f"{texto} [{'/'.join(opcoes)}]: ").strip().lstrip("﻿")  # PowerShell 5.1 manda BOM no pipe
+        except EOFError:
+            sys.exit("\nEntrada encerrada. Nada foi gravado.")
         for o in opcoes:
             if r.lower() == o.lower():
                 return o
