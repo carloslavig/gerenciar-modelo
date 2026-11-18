@@ -1,6 +1,6 @@
 ---
 name: gerenciar-modelo
-description: Economiza tokens o tempo todo escolhendo o modelo Claude certo (Haiku, Sonnet, Opus, Fable) para cada parte da tarefa e dividindo o trabalho numa árvore de sessões e subagentes mais baratos, conforme o plano da pessoa (Pro, Max, Team, Enterprise, API...) e o modo (economia ou performance). Use em TODA tarefa de construção, pesquisa ou mudança de código, ao delegar a subagente ou abrir sessão, e quando perguntarem "qual modelo uso?".
+description: Economiza tokens o tempo todo escolhendo o modelo Claude certo (Haiku, Sonnet, Opus, Fable) para cada parte da tarefa e dividindo o trabalho numa árvore de sessões e subagentes mais baratos, conforme o plano da pessoa (Pro, Max, Ultra, Team, Enterprise, API), o modelo principal que ela escolheu e o modo (economia ou performance). Use em TODA tarefa de construção, pesquisa ou mudança de código, ao delegar a subagente ou abrir sessão, e quando perguntarem "qual modelo uso?".
 ---
 
 # Gerenciar modelo
@@ -9,30 +9,27 @@ A economia é **constante**: desde a instalação, toda tarefa passa por esta di
 
 ## 1. Ler a configuração (sempre primeiro, sem comentar)
 
-`~/.claude/gerenciar-modelo.json`, gravado pelo instalador com a autorização da pessoa:
+Leia o arquivo `~/.claude/gerenciar-modelo.json` (gravado pelo instalador com a autorização da pessoa). Campos: `plano`, `modo`, `modelo_principal`, `modelos_permitidos`.
 
-```json
-{"plano": "Pro", "modo": "economia", "modelos_permitidos": ["haiku", "sonnet", "opus"]}
-```
-
+- **O plano vem SÓ desse arquivo ou do app, nunca de exemplo, suposição ou outra máquina.** Não diga o plano da pessoa sem ter lido.
 - Sem o arquivo: a pessoa não autorizou. Não troque nada.
-- **Nunca use modelo fora de `modelos_permitidos`.** Pro não tem Fable.
-- Confira o plano ao vivo quando der: `mcp__ccd_session_mgmt__get_usage` → `plan.plan`. Se for diferente do arquivo, valha o mais restritivo; se o plano ao vivo for Pro, Fable fica proibido mesmo que o arquivo diga outra coisa.
+- **Nunca use modelo fora de `modelos_permitidos`.** Pro não tem Fable; Ultra tem.
+- Confira ao vivo quando der: `mcp__ccd_session_mgmt__get_usage` → `plan.plan`. Se o app mostrar um plano maior que o arquivo (ex.: arquivo Pro, app Ultra), avise UMA vez para rodar `python instalar.py` de novo e siga o arquivo até lá. Se o app mostrar Pro, Fable fica proibido.
 - Uma chamada com modelo recusada pelo app ("modelo não disponível") = esse modelo não existe no plano: não tente de novo nesta conversa.
 - Modo antigo `auto` vale como `economia`.
 
-## 2. Os dois modos (os dois economizam)
+## 2. Modelo principal e modos
+
+**Modelo principal** (`modelo_principal`, escolhido pela pessoa na instalação, Opus recomendado): é o da conversa que começa o projeto, entende o todo e distribui as tarefas. O instalador o põe como padrão das conversas novas. Ele planeja e revisa; o trabalho braçal desce pela árvore.
 
 **Economia (padrão):** cada parte no modelo mais barato que dá conta.
-- Conversa principal: Sonnet (padrão das conversas novas).
 - Fable só em **extrema necessidade** (o Opus já errou a mesma coisa duas vezes, ou a decisão pode causar perda de dinheiro, de dados ou falha de segurança) **e** se o plano permitir.
 
 **Performance:** gasta mais para render mais, sem desperdiçar.
-- Conversa principal: Opus, ou Fable se o plano permitir.
-- Pode delegar a Fable (filhas ou subagentes) as partes difíceis.
+- Delega a Fable (se o plano permitir) ou Opus as partes difíceis.
 - A árvore continua: busca e leitura seguem no Haiku, implementação no Sonnet.
 
-Se a pessoa disser "modo economia" ou "modo performance" na conversa, vale para aquela conversa. Para mudar de vez: `python instalar.py --modo <modo>`.
+Se a pessoa disser "modo economia" ou "modo performance" na conversa, vale para aquela conversa. Para mudar de vez: `python instalar.py --modo <modo>` ou `--principal <modelo>`.
 
 ## 3. Qual modelo para cada parte
 

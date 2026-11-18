@@ -3,6 +3,7 @@
 Uso:
   python instalar.py                      instala (pergunta tudo antes de gravar)
   python instalar.py --modo performance   troca só o modo (economia | performance)
+  python instalar.py --principal sonnet   troca o modelo da conversa principal (opus | sonnet | fable)
   python instalar.py --desinstalar        remove tudo o que o instalador gravou
 """
 import json
@@ -36,7 +37,7 @@ def detectar_plano(conta=CONTA):
     except (OSError, ValueError):
         return None
     tipo = str((dados.get("oauthAccount") or {}).get("organizationType") or "").lower()
-    for plano in PLANOS[:-1]:
+    for plano in ("Ultra", "Max", "Enterprise", "Team", "Pro"):  # o mais específico primeiro
         if plano.lower() in tipo:
             return plano
     return "API" if dados.get("primaryApiKey") and not tipo else None
@@ -47,15 +48,10 @@ def modelos_do_plano(plano, tem_fable):
     return base + ["fable"] if tem_fable and plano != "Pro" else base
 
 
-def config(plano, modo, tem_fable):
-    assert plano in PLANOS and modo in MODOS
-    return {"plano": plano, "modo": modo, "modelos_permitidos": modelos_do_plano(plano, tem_fable)}
-
-
-def modelo_padrao(modo, permitidos):
-    if modo == "economia":
-        return "sonnet"
-    return "fable" if "fable" in permitidos else "opus"
+def config(plano, modo, tem_fable, principal="opus"):
+    permitidos = modelos_do_plano(plano, tem_fable)
+    assert plano in PLANOS and modo in MODOS and principal in permitidos
+    return {"plano": plano, "modo": modo, "modelo_principal": principal, "modelos_permitidos": permitidos}
 
 
 def ler_json(arq):
@@ -108,15 +104,17 @@ def instalar(base=CLAUDE, conta=CONTA):
     plano = detectar_plano(conta)
     if not (plano and sim(f"Detectei o plano {plano}. Está certo?")):
         plano = perguntar("Qual é o seu plano do Claude?", PLANOS)
-    tem_fable = plano != "Pro" and sim("Seu plano inclui o modelo Fable?")
-    modo = perguntar("Modo (os dois economizam sempre; economia usa Sonnet na principal e Fable só em extrema "
-                     "necessidade; performance usa Opus/Fable na principal e pode delegar ao Fable)", MODOS)
-    cfg = config(plano, modo, tem_fable)
-    padrao_modelo = modelo_padrao(modo, cfg["modelos_permitidos"])
+    tem_fable = plano == "Ultra" or (plano != "Pro" and sim("Seu plano inclui o modelo Fable?"))
+    opcoes = ("opus", "sonnet", "fable") if tem_fable else ("opus", "sonnet")
+    principal = perguntar("Modelo da conversa principal, que começa o projeto e distribui as tarefas "
+                          "(opus é o recomendado; sonnet gasta menos)", opcoes)
+    modo = perguntar("Modo (os dois economizam sempre; economia usa Fable só em extrema necessidade; "
+                     "performance pode delegar ao Fable e usa modelos mais fortes nas partes difíceis)", MODOS)
+    cfg = config(plano, modo, tem_fable, principal)
+    padrao_modelo = principal
     global_ = sim("Aplicar em TODAS as conversas (antigas quando forem retomadas, novas) e em todos os projetos, "
                   f"adicionando uma regra em {base / 'CLAUDE.md'}?")
-    padrao = sim(f"Pôr o modelo padrão das conversas novas conforme o modo (agora: {padrao_modelo}), "
-                 f"em {base / 'settings.json'}?")
+    padrao = sim(f"Pôr {padrao_modelo} como modelo padrão das conversas novas, em {base / 'settings.json'}?")
 
     print("\nVai ser gravado:")
     print(f"  - skill em {base / 'skills' / 'gerenciar-modelo'}")
@@ -156,9 +154,19 @@ def trocar_modo(modo, base=CLAUDE):
     cfg = ler_json(arq)
     cfg["modo"] = modo
     gravar_json(arq, cfg)
-    if cfg.get("padrao_gravado"):
-        por_padrao(base, modelo_padrao(modo, cfg["modelos_permitidos"]))
     print(f"Modo agora: {modo}")
+
+
+def trocar_principal(modelo, base=CLAUDE):
+    arq = base / "gerenciar-modelo.json"
+    cfg = ler_json(arq)
+    if modelo not in cfg.get("modelos_permitidos", []):
+        sys.exit(f"Modelo fora do plano ou skill não instalada. Permitidos: {cfg.get('modelos_permitidos')}")
+    cfg["modelo_principal"] = modelo
+    gravar_json(arq, cfg)
+    if cfg.get("padrao_gravado"):
+        por_padrao(base, modelo)
+    print(f"Modelo principal agora: {modelo}")
 
 
 def desinstalar(base=CLAUDE):
@@ -186,5 +194,7 @@ if __name__ == "__main__":
         desinstalar()
     elif a[:1] == ["--modo"] and len(a) == 2:
         trocar_modo(a[1])
+    elif a[:1] == ["--principal"] and len(a) == 2:
+        trocar_principal(a[1])
     else:
         instalar()
